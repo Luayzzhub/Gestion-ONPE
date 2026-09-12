@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Miembros de Mesa - ONPE</title>
+    <!-- Bootstrap 5.3.3 local y CDN de respaldo (sin hashes SRI conflictivos) -->
+    <link href="bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #1e293b;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: #0f172a !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .navbar .nav-link {
+            font-weight: 500;
+            border-radius: 30px;
+            padding: 0.4rem 1.1rem !important;
+            transition: all 0.2s ease;
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+        .navbar .nav-link:hover {
+            color: #ffffff !important;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .navbar .nav-link.active {
+            color: #ffffff !important;
+            background-color: #0d6efd !important;
+        }
+        .card {
+            border: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .card:hover {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
+        }
+        .stat-card-title {
+            letter-spacing: 0.5px;
+            font-size: 0.78rem;
+        }
+        .badge {
+            font-weight: 500;
+        }
+        /* Garantizar que el modal y las secciones ocultas no se muestren sin JS/CSS */
+        .modal {
+            display: none;
+        }
+        .modal.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm">
+        <div class="container">
+            <span class="navbar-brand fw-bold mb-0">Gestión ONPE</span>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContenido" aria-controls="navbarContenido" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarContenido">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link active px-3" id="nav-dashboard" href="#" onclick="navegarA('dashboard'); return false;">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" id="nav-mesas" href="#" onclick="navegarA('mesas'); return false;">Mesas</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" id="nav-miembros" href="#" onclick="navegarA('miembros'); return false;">Miembros</a>
+                    </li>
+                </ul>
+                <button class="btn btn-sm btn-outline-light rounded-pill ms-lg-3 mt-2 mt-lg-0 px-3" onclick="exportarDatosJSON()" title="Descargar copia de seguridad en JSON">
+                    💾 Descargar Respaldo
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mt-4 mb-5">
+
+        <!-- ================= PANTALLA 1: DASHBOARD ================= -->
+        <section id="vista-dashboard" class="vista-seccion">
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                <div>
+                    <h3 class="fw-bold mb-1">Dashboard General</h3>
+                    <p class="text-muted mb-0 small">Centro de información y avance electoral</p>
+                </div>
+                <!-- Filtro principal por mesa en Dashboard -->
+                <div class="d-flex align-items-center gap-2">
+                    <label for="dashboard-filtro-mesa" class="form-label mb-0 small fw-bold text-nowrap">Filtrar por Mesa:</label>
+                    <select id="dashboard-filtro-mesa" class="form-select form-select-sm">
+                        <option value="">Todas las mesas</option>
+                        <option value="043649">Mesa 043649</option>
+                        <option value="043650">Mesa 043650</option>
+                        <option value="043651">Mesa 043651</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Indicadores y Estadísticas -->
+            <div id="dashboard" class="row mb-4 g-3">
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm h-100 bg-primary-subtle rounded-4 border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="card-title text-uppercase mb-1 text-primary-emphasis" style="font-size: 0.8rem;">Total Miembros</h6>
+                            <h2 id="stat-total" class="display-6 fw-bold mb-0 text-primary-emphasis">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm h-100 bg-success-subtle rounded-4 border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="card-title text-uppercase mb-1 text-success-emphasis" style="font-size: 0.8rem;">Contactados</h6>
+                            <h2 id="stat-contactados" class="display-6 fw-bold mb-0 text-success-emphasis">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm h-100 bg-warning-subtle rounded-4 border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="card-title text-uppercase mb-1 text-warning-emphasis" style="font-size: 0.8rem;">Credenciales</h6>
+                            <h2 id="stat-credenciales" class="display-6 fw-bold mb-0 text-warning-emphasis">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm h-100 bg-info-subtle rounded-4 border-0">
+                        <div class="card-body text-center p-3">
+                            <h6 class="card-title text-uppercase mb-1 text-info-emphasis" style="font-size: 0.8rem;">Capacitados</h6>
+                            <h2 id="stat-capacitados" class="display-6 fw-bold mb-0 text-info-emphasis">0</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información de pendientes y avance general -->
+            <div class="row g-3 mb-4">
+                <div class="col-12 col-md-6">
+                    <div class="card shadow-sm h-100 rounded-4 border-0 p-3">
+                        <h6 class="fw-bold mb-3">Avance General de Gestión</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small text-muted">Progreso global de actividades</span>
+                            <span id="stat-porcentaje-progreso" class="fw-bold fs-5 text-primary">0%</span>
+                        </div>
+                        <div class="progress mb-3" style="height: 12px;">
+                            <div id="stat-barra-progreso" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <p class="small text-muted mb-0">Calculado sobre contacto, credencial y capacitación.</p>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="card shadow-sm h-100 rounded-4 border-0 p-3">
+                        <h6 class="fw-bold mb-3">Resumen de Pendientes</h6>
+                        <ul class="list-group list-group-flush small">
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                                <span>Por contactar</span>
+                                <span id="stat-pendiente-contacto" class="badge bg-danger rounded-pill">0</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                                <span>Credenciales por entregar</span>
+                                <span id="stat-pendiente-credencial" class="badge bg-warning text-dark rounded-pill">0</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                                <span>Capacitaciones pendientes</span>
+                                <span id="stat-pendiente-capacitacion" class="badge bg-secondary rounded-pill">0</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accesos rápidos -->
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-primary rounded-pill px-4" onclick="navegarA('mesas')">
+                    Ver Gestión de Mesas &rarr;
+                </button>
+                <button class="btn btn-primary rounded-pill px-4" onclick="navegarA('miembros')">
+                    Ver Gestión de Miembros &rarr;
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= PANTALLA 2: GESTIÓN DE MESAS ================= -->
+        <section id="vista-mesas" class="vista-seccion d-none">
+            <div class="mb-4">
+                <h3 class="fw-bold mb-1">Gestión de Mesas</h3>
+                <p class="text-muted mb-0 small">Supervisión y estado general por mesa electoral (3 mesas activas)</p>
+            </div>
+
+            <!-- Contenedor de tarjetas por mesa -->
+            <div id="contenedor-mesas" class="row g-3"></div>
+        </section>
+
+        <!-- ================= PANTALLA 3: GESTIÓN DE MIEMBROS ================= -->
+        <section id="vista-miembros" class="vista-seccion d-none">
+            <div class="mb-4">
+                <h3 class="fw-bold mb-1">Gestión de Miembros</h3>
+                <p class="text-muted mb-0 small">Listado detallado y administración de miembros de mesa</p>
+            </div>
+
+            <!-- Filtros y Búsqueda -->
+            <div class="card mb-4 rounded-4 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label for="input-busqueda" class="form-label">Buscar</label>
+                            <input type="text" id="input-busqueda" class="form-control form-control-sm" placeholder="Buscar por DNI o Nombre...">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="filtro-mesa" class="form-label">Mesa</label>
+                            <select id="filtro-mesa" class="form-select form-select-sm">
+                                <option value="">Todas</option>
+                                <option value="043649">043649</option>
+                                <option value="043650">043650</option>
+                                <option value="043651">043651</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="filtro-cargo" class="form-label">Cargo</label>
+                            <select id="filtro-cargo" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <option value="Presidente">Presidente</option>
+                                <option value="Secretaria">Secretaria</option>
+                                <option value="Tercer Miembro">Tercer Miembro</option>
+                                <option value="Primer Suplente">Primer Suplente</option>
+                                <option value="Segundo Suplente">Segundo Suplente</option>
+                                <option value="Tercer Suplente">Tercer Suplente</option>
+                                <option value="Cuarto Suplente">Cuarto Suplente</option>
+                                <option value="Quinto Suplente">Quinto Suplente</option>
+                                <option value="Sexto Suplente">Sexto Suplente</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filtro-estado" class="form-label">Estado</label>
+                            <select id="filtro-estado" class="form-select form-select-sm">
+                                <option value="">Todos los estados</option>
+                                <optgroup label="✅ Cumplidos">
+                                    <option value="es-contactado">Contactados</option>
+                                    <option value="es-credencial">Credencial entregada</option>
+                                    <option value="es-capacitacion">Capacitados</option>
+                                    <option value="completado-todo">Todo completado (3/3)</option>
+                                    <option value="vive-aqui">Vive en dirección</option>
+                                </optgroup>
+                                <optgroup label="⏳ Pendientes">
+                                    <option value="falta-contacto">Falta Contacto</option>
+                                    <option value="falta-credencial">Falta Credencial</option>
+                                    <option value="falta-capacitacion">Falta Capacitación</option>
+                                    <option value="no-vive">No vive en dirección</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button id="btn-limpiar" class="btn btn-outline-secondary btn-sm w-100">Limpiar Filtros</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenedor de miembros -->
+            <div id="contenedor-miembros" class="row g-3"></div>
+        </section>
+
+    </main>
+
+    <!-- Modal Gestión -->
+    <div class="modal fade" id="modalGestion" tabindex="-1" aria-labelledby="modalGestionLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header bg-dark text-white rounded-top-4">
+                    <h5 class="modal-title fs-6 fw-bold" id="modalGestionLabel">📋 Ficha del Miembro de Mesa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form id="form-gestion">
+                        <input type="hidden" id="gestion-id">
+
+                        <!-- Información de Asignación (Mesa y Cargo) -->
+                        <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded-3 border">
+                            <div>
+                                <small class="text-muted d-block">Mesa de Sufragio</small>
+                                <span class="fw-bold" id="gestion-mesa-badge">043649</span>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted d-block">Cargo Asignado</small>
+                                <span class="badge bg-primary rounded-pill px-3 py-1" id="gestion-cargo-badge">Presidente</span>
+                            </div>
+                        </div>
+
+                        <!-- Datos Personales Reales -->
+                        <h6 class="fw-bold text-primary mb-2 small text-uppercase">1. Datos Personales (Credencial)</h6>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold mb-1">Apellidos y Nombres</label>
+                            <input type="text" id="gestion-nombre" class="form-control form-control-sm" placeholder="Ej. CALMET DEL CASTILLO, ERICK OMAR" required>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold mb-1">DNI (8 dígitos)</label>
+                                <input type="text" id="gestion-dni" class="form-control form-control-sm" placeholder="Ej. 07632026" maxlength="8">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold mb-1">Teléfono (Opcional)</label>
+                                <input type="tel" id="gestion-telefono" class="form-control form-control-sm" placeholder="Ej. 987654321">
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold mb-1">Dirección según Credencial</label>
+                            <input type="text" id="gestion-direccion" class="form-control form-control-sm" placeholder="Ej. JR. SINCHI ROCA 2685">
+                        </div>
+
+                        <div class="form-check form-switch mb-3 p-2 bg-light rounded border">
+                            <input class="form-check-input ms-0 me-2" type="checkbox" id="check-vive-direccion">
+                            <label class="form-check-label small fw-bold" for="check-vive-direccion">¿Vive actualmente en esta dirección?</label>
+                        </div>
+
+                        <hr class="my-3">
+
+                        <!-- Estado de Actividades ONPE -->
+                        <h6 class="fw-bold text-primary mb-2 small text-uppercase">2. Estado de Actividades ONPE</h6>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="check-contactado">
+                            <label class="form-check-label small" for="check-contactado">Contactado / Notificado</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="check-credencial">
+                            <label class="form-check-label small" for="check-credencial">Credencial entregada</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="check-capacitacion">
+                            <label class="form-check-label small" for="check-capacitacion">Capacitación completada</label>
+                        </div>
+
+                        <!-- Observaciones -->
+                        <div class="mb-0">
+                            <label for="text-observaciones" class="form-label small fw-bold mb-1">Observaciones</label>
+                            <textarea id="text-observaciones" class="form-control form-control-sm" rows="2" placeholder="Ej. Se mudó, vive familiar, no tiene número propio, etc."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-light rounded-bottom-4 py-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="form-gestion" class="btn btn-primary btn-sm rounded-pill px-4">Guardar Datos</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle (local con fallback CDN sin hash SRI conflictivo) -->
+    <script src="bootstrap.bundle.min.js"></script>
+    <script>
+        if (typeof bootstrap === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"><\/script>');
+        }
+    </script>
+    <script src="app.js"></script>
+</body>
+</html>
