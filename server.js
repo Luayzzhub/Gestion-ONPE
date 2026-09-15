@@ -79,6 +79,9 @@ db.exec(`
         contactado INTEGER DEFAULT 0,
         credencial INTEGER DEFAULT 0,
         capacitacion INTEGER DEFAULT 0,
+        capacitacion_1 INTEGER DEFAULT 0,
+        capacitacion_2 INTEGER DEFAULT 0,
+        asiste_elecciones TEXT DEFAULT 'pendiente',
         visita_realizada INTEGER DEFAULT 0,
         visita_estado TEXT DEFAULT 'no_visitado',
         visita_fecha TEXT,
@@ -88,6 +91,11 @@ db.exec(`
         FOREIGN KEY (coordinador_id) REFERENCES coordinadores(id) ON DELETE CASCADE
     );
 `);
+
+// Migraciones automáticas e idempotentes para bases de datos existentes
+try { db.exec(`ALTER TABLE miembros ADD COLUMN capacitacion_1 INTEGER DEFAULT 0;`); } catch(e) {}
+try { db.exec(`ALTER TABLE miembros ADD COLUMN capacitacion_2 INTEGER DEFAULT 0;`); } catch(e) {}
+try { db.exec(`ALTER TABLE miembros ADD COLUMN asiste_elecciones TEXT DEFAULT 'pendiente';`); } catch(e) {}
 
 console.log("✓ Base de datos SQLite inicializada correctamente en:", DB_FILE);
 
@@ -335,6 +343,9 @@ const server = http.createServer(async (req, res) => {
                         contactado = 1 as contactado,
                         credencial = 1 as credencial,
                         capacitacion = 1 as capacitacion,
+                        capacitacion_1 = 1 as capacitacion1,
+                        capacitacion_2 = 1 as capacitacion2,
+                        asiste_elecciones as asisteElecciones,
                         visita_realizada = 1 as visitaRealizada,
                         visita_estado as visitaEstado,
                         visita_fecha as visitaFecha,
@@ -350,7 +361,10 @@ const server = http.createServer(async (req, res) => {
                     viveEnDireccion: Boolean(m.viveEnDireccion),
                     contactado: Boolean(m.contactado),
                     credencial: Boolean(m.credencial),
-                    capacitacion: Boolean(m.capacitacion),
+                    capacitacion: Boolean(m.capacitacion || m.capacitacion1 || m.capacitacion2),
+                    capacitacion1: Boolean(m.capacitacion1),
+                    capacitacion2: Boolean(m.capacitacion2),
+                    asisteElecciones: m.asisteElecciones || 'pendiente',
                     visitaRealizada: Boolean(m.visitaRealizada)
                 }));
                 return responderJSON(res, 200, { success: true, miembros });
@@ -363,13 +377,17 @@ const server = http.createServer(async (req, res) => {
 
                 const b = await leerJSONBody(req);
                 const id = "m_" + Date.now() + "_" + crypto.randomBytes(4).toString('hex');
+                const cap1 = b.capacitacion1 ? 1 : 0;
+                const cap2 = b.capacitacion2 ? 1 : 0;
+                const capGeneral = (b.capacitacion || cap1 || cap2) ? 1 : 0;
 
                 db.prepare(`
                     INSERT INTO miembros (
                         id, coordinador_id, mesa, cargo, nombre, dni, telefono, direccion,
                         vive_en_direccion, contactado, credencial, capacitacion,
+                        capacitacion_1, capacitacion_2, asiste_elecciones,
                         visita_realizada, visita_estado, visita_fecha, visita_observaciones, observaciones
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).run(
                     id, coord.id,
                     (b.mesa || '').trim(),
@@ -381,7 +399,10 @@ const server = http.createServer(async (req, res) => {
                     b.viveEnDireccion ? 1 : 0,
                     b.contactado ? 1 : 0,
                     b.credencial ? 1 : 0,
-                    b.capacitacion ? 1 : 0,
+                    capGeneral,
+                    cap1,
+                    cap2,
+                    b.asisteElecciones || 'pendiente',
                     b.visitaRealizada ? 1 : 0,
                     b.visitaEstado || 'no_visitado',
                     b.visitaFecha || '',
@@ -399,6 +420,9 @@ const server = http.createServer(async (req, res) => {
 
                 const id = decodeURIComponent(pathname.split('/')[3] || '');
                 const b = await leerJSONBody(req);
+                const cap1 = b.capacitacion1 ? 1 : 0;
+                const cap2 = b.capacitacion2 ? 1 : 0;
+                const capGeneral = (b.capacitacion || cap1 || cap2) ? 1 : 0;
 
                 db.prepare(`
                     UPDATE miembros SET
@@ -412,6 +436,9 @@ const server = http.createServer(async (req, res) => {
                         contactado = ?,
                         credencial = ?,
                         capacitacion = ?,
+                        capacitacion_1 = ?,
+                        capacitacion_2 = ?,
+                        asiste_elecciones = ?,
                         visita_realizada = ?,
                         visita_estado = ?,
                         visita_fecha = ?,
@@ -429,7 +456,10 @@ const server = http.createServer(async (req, res) => {
                     b.viveEnDireccion ? 1 : 0,
                     b.contactado ? 1 : 0,
                     b.credencial ? 1 : 0,
-                    b.capacitacion ? 1 : 0,
+                    capGeneral,
+                    cap1,
+                    cap2,
+                    b.asisteElecciones || 'pendiente',
                     b.visitaRealizada ? 1 : 0,
                     b.visitaEstado || 'no_visitado',
                     b.visitaFecha || '',
@@ -462,6 +492,9 @@ const server = http.createServer(async (req, res) => {
                     SELECT id, mesa, cargo, nombre, dni, telefono, direccion, 
                            vive_en_direccion = 1 as viveEnDireccion,
                            contactado = 1 as contactado, credencial = 1 as credencial, capacitacion = 1 as capacitacion,
+                           capacitacion_1 = 1 as capacitacion1,
+                           capacitacion_2 = 1 as capacitacion2,
+                           asiste_elecciones as asisteElecciones,
                            visita_realizada = 1 as visitaRealizada, visita_estado as visitaEstado,
                            visita_fecha as visitaFecha, visita_observaciones as visitaObservaciones, observaciones
                     FROM miembros WHERE coordinador_id = ?
@@ -472,7 +505,10 @@ const server = http.createServer(async (req, res) => {
                     viveEnDireccion: Boolean(m.viveEnDireccion),
                     contactado: Boolean(m.contactado),
                     credencial: Boolean(m.credencial),
-                    capacitacion: Boolean(m.capacitacion),
+                    capacitacion: Boolean(m.capacitacion || m.capacitacion1 || m.capacitacion2),
+                    capacitacion1: Boolean(m.capacitacion1),
+                    capacitacion2: Boolean(m.capacitacion2),
+                    asisteElecciones: m.asisteElecciones || 'pendiente',
                     visitaRealizada: Boolean(m.visitaRealizada)
                 }));
 

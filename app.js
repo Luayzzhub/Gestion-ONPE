@@ -300,6 +300,9 @@ function navegarA(vistaId, filtroMesa = null) {
         aplicarFiltros();
     } else if (vistaId === 'mapa') {
         renderizarMapaVisitas();
+    } else if (vistaId === 'reporte') {
+        actualizarSelectoresMesas();
+        renderizarReporteFinal();
     }
 
     // Cerrar navbar en móviles al seleccionar vista
@@ -320,6 +323,7 @@ function actualizarSelectoresMesas() {
         document.getElementById("dashboard-filtro-mesa"),
         document.getElementById("filtro-mesa"),
         document.getElementById("mapa-filtro-mesa"),
+        document.getElementById("reporte-filtro-mesa"),
         document.getElementById("nuevo-miembro-mesa"),
         document.getElementById("gestion-mesa-select"),
         document.getElementById("ocr-mesa")
@@ -357,6 +361,7 @@ function sincronizarTodoUI() {
     renderizarMesas();
     aplicarFiltros();
     renderizarMapaVisitas();
+    renderizarReporteFinal();
 }
 
 // ==========================================
@@ -610,6 +615,9 @@ async function guardarNuevoMiembro(datos) {
         contactado: false,
         credencial: false,
         capacitacion: false,
+        capacitacion1: false,
+        capacitacion2: false,
+        asisteElecciones: "pendiente",
         visitaRealizada: false,
         visitaEstado: "no_visitado",
         visitaFecha: "",
@@ -781,26 +789,36 @@ function abrirModalDetalle(id) {
 
             <div class="col-12">
                 <div class="p-3 border rounded-4 bg-white">
-                    <h6 class="fw-bold text-primary mb-3">✅ Actividades Oficiales ONPE</h6>
-                    <div class="row g-2 text-center">
-                        <div class="col-4">
+                    <h6 class="fw-bold text-primary mb-3">✅ Actividades ONPE, Capacitaciones y Elecciones</h6>
+                    <div class="row g-2 text-center mb-2">
+                        <div class="col-6 col-md-3">
                             <div class="p-2 rounded-3 ${miembro.contactado ? 'bg-success-subtle text-success-emphasis' : 'bg-light text-muted border'}">
                                 <small class="d-block">Contactado</small>
                                 <strong>${miembro.contactado ? 'SÍ' : 'NO'}</strong>
                             </div>
                         </div>
-                        <div class="col-4">
+                        <div class="col-6 col-md-3">
                             <div class="p-2 rounded-3 ${miembro.credencial ? 'bg-success-subtle text-success-emphasis' : 'bg-light text-muted border'}">
                                 <small class="d-block">Credencial</small>
                                 <strong>${miembro.credencial ? 'ENTREGADA' : 'PENDIENTE'}</strong>
                             </div>
                         </div>
-                        <div class="col-4">
-                            <div class="p-2 rounded-3 ${miembro.capacitacion ? 'bg-success-subtle text-success-emphasis' : 'bg-light text-muted border'}">
-                                <small class="d-block">Capacitación</small>
-                                <strong>${miembro.capacitacion ? 'COMPLETA' : 'PENDIENTE'}</strong>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 rounded-3 ${miembro.capacitacion1 ? 'bg-primary-subtle text-primary-emphasis border border-primary' : 'bg-light text-muted border'}">
+                                <small class="d-block">Cap. 20 Sep (1ra)</small>
+                                <strong>${miembro.capacitacion1 ? '✅ ASISTIÓ' : '⏳ PENDIENTE'}</strong>
                             </div>
                         </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 rounded-3 ${miembro.capacitacion2 ? 'bg-primary-subtle text-primary-emphasis border border-primary' : 'bg-light text-muted border'}">
+                                <small class="d-block">Cap. 27 Sep (2da)</small>
+                                <strong>${miembro.capacitacion2 ? '✅ ASISTIÓ' : '⏳ PENDIENTE'}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-2 rounded-3 text-center ${miembro.asisteElecciones === 'si' ? 'bg-success text-white' : (miembro.asisteElecciones === 'no' ? 'bg-danger text-white' : 'bg-warning text-dark')}">
+                        <small class="d-block text-uppercase" style="font-size:0.72rem; letter-spacing:0.5px;">Compromiso para la Jornada Electoral</small>
+                        <strong class="fs-6">${miembro.asisteElecciones === 'si' ? '✅ Asistencia a Elecciones Confirmada' : (miembro.asisteElecciones === 'no' ? '❌ No Asistirá (Requiere Reemplazo)' : '⏳ Asistencia Por Confirmar / En Duda')}</strong>
                     </div>
                 </div>
             </div>
@@ -856,10 +874,15 @@ function abrirModalGestion(id) {
     document.getElementById("gestion-visita-fecha").value = miembro.visitaFecha || "";
     document.getElementById("gestion-visita-obs").value = miembro.visitaObservaciones || "";
 
-    // Actividades ONPE
+    // Actividades ONPE, Capacitaciones y Elecciones
     document.getElementById("check-contactado").checked = Boolean(miembro.contactado);
     document.getElementById("check-credencial").checked = Boolean(miembro.credencial);
-    document.getElementById("check-capacitacion").checked = Boolean(miembro.capacitacion);
+    const elCap1 = document.getElementById("check-capacitacion-1");
+    if (elCap1) elCap1.checked = Boolean(miembro.capacitacion1);
+    const elCap2 = document.getElementById("check-capacitacion-2");
+    if (elCap2) elCap2.checked = Boolean(miembro.capacitacion2);
+    const elAsiste = document.getElementById("select-asiste-elecciones");
+    if (elAsiste) elAsiste.value = miembro.asisteElecciones || "pendiente";
 
     // Observaciones
     document.getElementById("text-observaciones").value = miembro.observaciones || "";
@@ -1249,7 +1272,172 @@ function abrirRutaOptimizadaGoogleMaps() {
 }
 
 // ==========================================
-// 11. RESPALDO Y EXPORTACIÓN JSON
+// 11. PADRÓN FINAL Y REPORTE PDF OFICIAL
+// ==========================================
+function renderizarReporteFinal() {
+    if (!sesionActiva.autenticado) return;
+
+    const todos = sesionActiva.datos.miembros || [];
+    const filtroMesa = document.getElementById("reporte-filtro-mesa")?.value || "";
+    const filtroAsist = document.getElementById("reporte-filtro-asistencia")?.value || "";
+
+    let filtrados = filtroMesa ? todos.filter(m => m.mesa === filtroMesa) : todos;
+
+    if (filtroAsist === "si") {
+        filtrados = filtrados.filter(m => m.asisteElecciones === "si");
+    } else if (filtroAsist === "no") {
+        filtrados = filtrados.filter(m => m.asisteElecciones === "no");
+    } else if (filtroAsist === "pendiente") {
+        filtrados = filtrados.filter(m => !m.asisteElecciones || m.asisteElecciones === "pendiente");
+    }
+
+    // Calcular estadísticas
+    const total = filtrados.length;
+    const cap1 = filtrados.filter(m => m.capacitacion1).length;
+    const cap2 = filtrados.filter(m => m.capacitacion2).length;
+    const ambas = filtrados.filter(m => m.capacitacion1 && m.capacitacion2).length;
+    const confirmados = filtrados.filter(m => m.asisteElecciones === "si").length;
+    const bajas = filtrados.filter(m => m.asisteElecciones === "no" || (!m.asisteElecciones || m.asisteElecciones === "pendiente")).length;
+
+    // Actualizar KPIs en pantalla
+    const elTot = document.getElementById("rep-stat-total");
+    if (elTot) elTot.textContent = total;
+    const elC1 = document.getElementById("rep-stat-cap1");
+    if (elC1) elC1.textContent = cap1;
+    const elC2 = document.getElementById("rep-stat-cap2");
+    if (elC2) elC2.textContent = cap2;
+    const elAmb = document.getElementById("rep-stat-ambas");
+    if (elAmb) elAmb.textContent = ambas;
+    const elConf = document.getElementById("rep-stat-confirmados");
+    if (elConf) elConf.textContent = confirmados;
+    const elBaj = document.getElementById("rep-stat-bajas");
+    if (elBaj) elBaj.textContent = bajas;
+
+    // Actualizar metadatos del membrete institucional
+    const elCoord = document.getElementById("rep-pdf-coordinador");
+    if (elCoord) elCoord.textContent = sesionActiva.nombre || sesionActiva.usuario;
+    const elFecha = document.getElementById("rep-pdf-fecha");
+    if (elFecha) elFecha.textContent = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const elMesaTxt = document.getElementById("rep-pdf-mesa-txt");
+    if (elMesaTxt) elMesaTxt.textContent = filtroMesa ? `Mesa ${filtroMesa}` : `Todas las mesas (${sesionActiva.datos.mesas?.length || 0})`;
+    const elPieCoord = document.getElementById("pie-nombre-coordinador");
+    if (elPieCoord) elPieCoord.textContent = sesionActiva.nombre || sesionActiva.usuario;
+
+    // Renderizar filas
+    const tbody = document.getElementById("tbody-reporte-final");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (filtrados.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="text-center py-4 text-muted">
+                    No se encontraron miembros registrados para el filtro seleccionado.
+                </td>
+            </tr>`;
+        return;
+    }
+
+    filtrados.forEach((m, idx) => {
+        let badgeAsistencia = '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning rounded-pill badge-print">⏳ Por confirmar</span>';
+        if (m.asisteElecciones === 'si') {
+            badgeAsistencia = '<span class="badge bg-success-subtle text-success-emphasis border border-success rounded-pill badge-print">✅ Confirmado</span>';
+        } else if (m.asisteElecciones === 'no') {
+            badgeAsistencia = '<span class="badge bg-danger-subtle text-danger-emphasis border border-danger rounded-pill badge-print">❌ No asistirá</span>';
+        }
+
+        const badgeCap1 = m.capacitacion1
+            ? '<span class="badge bg-success rounded-pill badge-print">✅ Asistió</span>'
+            : '<span class="badge bg-secondary rounded-pill badge-print">⏳ Pendiente</span>';
+
+        const badgeCap2 = m.capacitacion2
+            ? '<span class="badge bg-success rounded-pill badge-print">✅ Asistió</span>'
+            : '<span class="badge bg-secondary rounded-pill badge-print">⏳ Pendiente</span>';
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td class="text-muted small fw-bold">${idx + 1}</td>
+            <td><span class="badge bg-light text-dark border">Mesa ${m.mesa}</span></td>
+            <td><span class="badge bg-primary-subtle text-primary-emphasis rounded-pill small">${m.cargo}</span></td>
+            <td>
+                <span class="fw-bold d-block text-truncate" style="max-width: 250px;" title="${m.nombre || m.cargo}">
+                    ${m.nombre || '<span class="text-muted fst-italic">[Pendiente de registro]</span>'}
+                </span>
+            </td>
+            <td><code>${m.dni || 'S/N'}</code></td>
+            <td>
+                ${m.telefono ? `<a href="${generarEnlaceWhatsApp(m)}" target="_blank" class="text-decoration-none small text-success fw-bold">📱 ${m.telefono}</a>` : '<span class="text-muted small">S/N</span>'}
+            </td>
+            <td class="text-center">${badgeCap1}</td>
+            <td class="text-center">${badgeCap2}</td>
+            <td class="text-center">${badgeAsistencia}</td>
+            <td class="text-center col-acciones-print">
+                <button class="btn btn-outline-primary btn-sm rounded-pill px-2 py-0" onclick="abrirModalGestion('${m.id}')" title="Editar datos">
+                    ✏️ Editar
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Exportar Reporte a PDF con formato institucional
+async function exportarReportePDF() {
+    if (!sesionActiva.autenticado) return;
+
+    if (typeof html2pdf === 'undefined') {
+        alert("El generador de PDF aún se está cargando. Por favor espera 2 segundos o usa la opción 'Imprimir'.");
+        return;
+    }
+
+    const elemento = document.getElementById("area-reporte-pdf");
+    if (!elemento) return;
+
+    const filtroMesa = document.getElementById("reporte-filtro-mesa")?.value || "Todas";
+    const fechaStr = new Date().toISOString().slice(0, 10);
+    const nombreArchivo = `Padron_Mesas_ONPE_${filtroMesa}_${fechaStr}.pdf`;
+
+    const opciones = {
+        margin: [6, 6, 6, 6],
+        filename: nombreArchivo,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false
+        },
+        jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'landscape'
+        }
+    };
+
+    // Mostrar pie de firma en el PDF
+    const piePrint = document.getElementById("pie-reporte-impresion");
+    if (piePrint) piePrint.classList.remove("d-none");
+
+    // Ocultar botones de acciones en el PDF
+    document.querySelectorAll(".col-acciones-print").forEach(el => el.classList.add("d-none"));
+
+    try {
+        await html2pdf().set(opciones).from(elemento).save();
+    } catch (err) {
+        console.error("Error al exportar PDF:", err);
+        alert("No se pudo generar el PDF directamente. Puedes usar el botón 'Imprimir' y seleccionar 'Guardar como PDF' en tu navegador.");
+    } finally {
+        if (piePrint) piePrint.classList.add("d-none");
+        document.querySelectorAll(".col-acciones-print").forEach(el => el.classList.remove("d-none"));
+    }
+}
+
+// Imprimir reporte con diálogo nativo
+function imprimirReporte() {
+    window.print();
+}
+
+// ==========================================
+// 12. RESPALDO Y EXPORTACIÓN JSON
 // ==========================================
 async function exportarDatosJSON() {
     if (!sesionActiva.autenticado) return;
@@ -1388,6 +1576,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const miembro = sesionActiva.datos.miembros.find(m => m.id === id);
         if (!miembro) return;
 
+        const cap1 = Boolean(document.getElementById("check-capacitacion-1")?.checked);
+        const cap2 = Boolean(document.getElementById("check-capacitacion-2")?.checked);
+        const asisteElecciones = document.getElementById("select-asiste-elecciones")?.value || "pendiente";
+
         const updateData = {
             mesa: document.getElementById("gestion-mesa-select").value,
             cargo: document.getElementById("gestion-cargo-select").value,
@@ -1403,10 +1595,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             visitaFecha: document.getElementById("gestion-visita-fecha").value,
             visitaObservaciones: document.getElementById("gestion-visita-obs").value.trim(),
 
-            // Actividades ONPE
+            // Actividades ONPE, Capacitaciones y Elecciones
             contactado: document.getElementById("check-contactado").checked,
             credencial: document.getElementById("check-credencial").checked,
-            capacitacion: document.getElementById("check-capacitacion").checked,
+            capacitacion: cap1 || cap2,
+            capacitacion1: cap1,
+            capacitacion2: cap2,
+            asisteElecciones: asisteElecciones,
             observaciones: document.getElementById("text-observaciones").value.trim()
         };
 

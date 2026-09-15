@@ -87,6 +87,18 @@
             box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
             pointer-events: none;
         }
+
+        /* Estilos de Impresión y PDF Oficial */
+        @media print {
+            body { background: #fff !important; color: #000 !important; font-size: 9pt !important; }
+            .navbar, #auth-alert-container, .btn-no-print, .col-acciones-print, .vista-seccion:not(#vista-reporte) { display: none !important; }
+            #vista-reporte { display: block !important; }
+            .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+            .table-reporte-pdf { font-size: 8.5pt !important; width: 100% !important; }
+            .table-reporte-pdf th, .table-reporte-pdf td { padding: 4px 6px !important; border: 1px solid #999 !important; }
+            .badge-print { border: 1px solid #555 !important; font-size: 7.5pt !important; padding: 2px 5px !important; }
+            @page { size: A4 landscape; margin: 10mm; }
+        }
     </style>
 </head>
 <body>
@@ -116,6 +128,9 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link px-3" id="nav-mapa" href="#" onclick="navegarA('mapa'); return false;">🗺️ Visitas y Mapa</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" id="nav-reporte" href="#" onclick="navegarA('reporte'); return false;">📊 Padrón / Reporte Final</a>
                     </li>
                 </ul>
 
@@ -481,6 +496,135 @@
             </div>
         </section>
 
+        <!-- ================= PANTALLA 5: PADRÓN Y REPORTE FINAL DE MESAS ================= -->
+        <section id="vista-reporte" class="vista-seccion d-none">
+            <!-- Barra de Herramientas y Filtros (Oculta al Imprimir) -->
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 btn-no-print">
+                <div>
+                    <h3 class="fw-bold mb-1">📊 Padrón y Reporte Final de Mesas</h3>
+                    <p class="text-muted mb-0 small">Asistencia a capacitaciones (20 y 27 de este mes) y confirmación electoral</p>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <select id="reporte-filtro-mesa" class="form-select form-select-sm rounded-pill" style="min-width: 170px;" onchange="renderizarReporteFinal()">
+                        <option value="">Todas las mesas</option>
+                    </select>
+                    <select id="reporte-filtro-asistencia" class="form-select form-select-sm rounded-pill" onchange="renderizarReporteFinal()">
+                        <option value="">Toda asistencia electoral</option>
+                        <option value="si">Solo Confirmados (Sí)</option>
+                        <option value="no">Solo No Asistirán (Bajas)</option>
+                        <option value="pendiente">Solo Pendientes</option>
+                    </select>
+                    <button class="btn btn-outline-dark btn-sm rounded-pill px-3 shadow-sm" onclick="imprimirReporte()" title="Imprimir reporte oficial">
+                        🖨️ Imprimir
+                    </button>
+                    <button class="btn btn-danger btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="exportarReportePDF()" title="Descargar como archivo PDF">
+                        📄 Exportar en PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Resumen de Métricas del Padrón -->
+            <div class="row g-3 mb-4 btn-no-print">
+                <div class="col-6 col-md-2">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Total Miembros</small>
+                        <h4 class="fw-bold mb-0 text-dark" id="rep-stat-total">0</h4>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Cap. 20 (1ra)</small>
+                        <h4 class="fw-bold mb-0 text-primary" id="rep-stat-cap1">0</h4>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Cap. 27 (2da)</small>
+                        <h4 class="fw-bold mb-0 text-primary" id="rep-stat-cap2">0</h4>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Ambas Cap.</small>
+                        <h4 class="fw-bold mb-0 text-info" id="rep-stat-ambas">0</h4>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Confirmados</small>
+                        <h4 class="fw-bold mb-0 text-success" id="rep-stat-confirmados">0</h4>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Bajas / Duda</small>
+                        <h4 class="fw-bold mb-0 text-danger" id="rep-stat-bajas">0</h4>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTENEDOR OFICIAL IMPRIMIBLE / PDF -->
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden bg-white p-3 p-md-4" id="area-reporte-pdf">
+                <!-- Membrete Institucional para el PDF e Impresión -->
+                <div class="border-bottom pb-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="fs-1">🗳️</span>
+                            <div>
+                                <h5 class="fw-bold text-dark mb-0 text-uppercase" style="letter-spacing: 0.5px;">Oficina Nacional de Procesos Electorales</h5>
+                                <h6 class="fw-bold text-primary mb-0">PADRÓN FINAL Y CONTROL DE ASISTENCIA ELECTORAL 2026</h6>
+                                <small class="text-muted">ODPE LIMA OESTE 1 · ELECCIONES GENERALES</small>
+                            </div>
+                        </div>
+                        <div class="text-end small">
+                            <div><strong>Coordinador:</strong> <span id="rep-pdf-coordinador">Coordinador</span></div>
+                            <div><strong>Fecha de Emisión:</strong> <span id="rep-pdf-fecha">-</span></div>
+                            <div><strong>Mesas:</strong> <span id="rep-pdf-mesa-txt">Todas las mesas</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla Principal -->
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 table-reporte-pdf" id="tabla-reporte-final">
+                        <thead class="table-dark">
+                            <tr class="small text-uppercase">
+                                <th style="width: 4%;">#</th>
+                                <th style="width: 10%;">Mesa</th>
+                                <th style="width: 14%;">Cargo</th>
+                                <th style="width: 24%;">Apellidos y Nombres</th>
+                                <th style="width: 10%;">DNI</th>
+                                <th style="width: 11%;">Celular</th>
+                                <th style="width: 8%;" class="text-center">Cap. 20</th>
+                                <th style="width: 8%;" class="text-center">Cap. 27</th>
+                                <th style="width: 11%;" class="text-center">¿Asiste?</th>
+                                <th style="width: 8%;" class="text-center col-acciones-print">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-reporte-final">
+                            <!-- Filas generadas dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pie de Página Institucional para PDF / Impresión -->
+                <div class="mt-4 pt-3 border-top d-none d-print-block" id="pie-reporte-impresion">
+                    <div class="row text-center small text-muted">
+                        <div class="col-6 pt-4">
+                            <div style="border-top: 1px solid #333; width: 60%; margin: 0 auto;"></div>
+                            <span class="d-block mt-1 fw-bold text-dark" id="pie-nombre-coordinador">Firma del Coordinador de Mesa</span>
+                            <span>Coordinación de Mesa · ODPE Lima Oeste 1</span>
+                        </div>
+                        <div class="col-6 pt-4">
+                            <div style="border-top: 1px solid #333; width: 60%; margin: 0 auto;"></div>
+                            <span class="d-block mt-1 fw-bold text-dark">Sello y V°B° Oficial ONPE</span>
+                            <span>Oficina Descentralizada de Procesos Electorales</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- ================= MODAL 1: FICHA DE CONSULTA COMPLETA (CLIC EN TARJETA) ================= -->
@@ -597,25 +741,51 @@
 
                         <hr class="my-3">
 
-                        <!-- Estado de Actividades ONPE -->
-                        <h6 class="fw-bold text-primary mb-2 small text-uppercase">3. Estado de Actividades ONPE</h6>
-                        <div class="row g-2 mb-3">
-                            <div class="col-4">
+                        <!-- Estado de Actividades ONPE y Capacitaciones -->
+                        <h6 class="fw-bold text-primary mb-2 small text-uppercase">3. Actividades ONPE, Capacitaciones y Elecciones</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
                                 <div class="form-check form-switch p-2 bg-light rounded border">
                                     <input class="form-check-input ms-0 me-2" type="checkbox" id="check-contactado">
-                                    <label class="form-check-label small" for="check-contactado">Contactado</label>
+                                    <label class="form-check-label small fw-semibold" for="check-contactado">Contactado</label>
                                 </div>
                             </div>
-                            <div class="col-4">
+                            <div class="col-6">
                                 <div class="form-check form-switch p-2 bg-light rounded border">
                                     <input class="form-check-input ms-0 me-2" type="checkbox" id="check-credencial">
-                                    <label class="form-check-label small" for="check-credencial">Credencial</label>
+                                    <label class="form-check-label small fw-semibold" for="check-credencial">Credencial Entregada</label>
                                 </div>
                             </div>
-                            <div class="col-4">
-                                <div class="form-check form-switch p-2 bg-light rounded border">
-                                    <input class="form-check-input ms-0 me-2" type="checkbox" id="check-capacitacion">
-                                    <label class="form-check-label small" for="check-capacitacion">Capacitado</label>
+                        </div>
+
+                        <!-- Panel de Capacitaciones Oficiales (20 y 27) y Compromiso Electoral -->
+                        <div class="p-3 bg-light rounded-3 border mb-3">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6 border-end-md">
+                                    <label class="form-label small fw-bold mb-2 text-dark d-block">Asistencia a Jornadas de Capacitación:</label>
+                                    <div class="form-check form-switch mb-2 p-2 bg-white rounded border">
+                                        <input class="form-check-input ms-0 me-2" type="checkbox" id="check-capacitacion-1">
+                                        <label class="form-check-label small fw-bold text-primary" for="check-capacitacion-1">
+                                            📅 1ra Capacitación (20 de este mes)
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-switch p-2 bg-white rounded border">
+                                        <input class="form-check-input ms-0 me-2" type="checkbox" id="check-capacitacion-2">
+                                        <label class="form-check-label small fw-bold text-primary" for="check-capacitacion-2">
+                                            📅 2da Capacitación (27 de este mes)
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="select-asiste-elecciones" class="form-label small fw-bold mb-2 text-dark d-block">¿Va a ir a las elecciones?:</label>
+                                    <select id="select-asiste-elecciones" class="form-select form-select-sm py-2 fw-semibold">
+                                        <option value="si">✅ Sí asistirá (Confirmado)</option>
+                                        <option value="no">❌ No asistirá (Baja / Requiere reemplazo)</option>
+                                        <option value="pendiente">⏳ Por confirmar / En duda</option>
+                                    </select>
+                                    <small class="text-muted d-block mt-2" style="font-size: 0.75rem;">
+                                        Registra el compromiso confirmado del miembro para presentarse a su mesa el día electoral.
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -864,6 +1034,8 @@
     </script>
     <!-- Tesseract.js para OCR cliente de credenciales -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- html2pdf.js para exportación a PDF oficial -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
