@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: gestion-onpe-lima-oeste
+    env: docker
+    plan: free
+    region: oregon
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 3000
