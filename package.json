@@ -1,0 +1,22 @@
+{
+  "name": "proyecto-onpe",
+  "version": "1.0.0",
+  "description": "Aplicación web estática y responsiva (Mobile-First) diseñada para la coordinación, seguimiento y administración operativa de miembros de mesa electoral para la Oficina Nacional de Procesos Electorales (ONPE).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Luayzzhub/Gestion-ONPE.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Luayzzhub/Gestion-ONPE/issues"
+  },
+  "homepage": "https://github.com/Luayzzhub/Gestion-ONPE#readme"
+}

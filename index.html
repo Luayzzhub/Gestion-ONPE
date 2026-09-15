@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Miembros de Mesa - ONPE</title>
-    <!-- Bootstrap 5.3.3 local y CDN de respaldo (sin hashes SRI conflictivos) -->
+    <!-- Bootstrap 5.3.3 local y CDN de respaldo -->
     <link href="bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -40,32 +40,71 @@
         .card:hover {
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
         }
-        .stat-card-title {
-            letter-spacing: 0.5px;
-            font-size: 0.78rem;
+        .kpi-card {
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.12) !important;
+        }
+        .miembro-card {
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .miembro-card:hover {
+            transform: translateY(-2px);
         }
         .badge {
             font-weight: 500;
         }
-        /* Garantizar que el modal y las secciones ocultas no se muestren sin JS/CSS */
         .modal {
             display: none;
         }
         .modal.show {
             display: block;
         }
+        #video-preview-cam {
+            width: 100%;
+            max-height: 260px;
+            background: #000;
+            border-radius: 12px;
+            object-fit: cover;
+        }
+        .scanner-overlay {
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+        }
+        .scanner-guide {
+            position: absolute;
+            top: 15%;
+            left: 10%;
+            right: 10%;
+            bottom: 15%;
+            border: 2px dashed #0d6efd;
+            border-radius: 8px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
 
+    <!-- BARRA DE NAVEGACIÓN PRINCIPAL -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm">
         <div class="container">
-            <span class="navbar-brand fw-bold mb-0">Gestión ONPE</span>
+            <span class="navbar-brand fw-bold mb-0">
+                🗳️ Gestión ONPE <span class="badge bg-primary text-uppercase fs-6 ms-1" style="font-size:0.65rem !important;">2026</span>
+            </span>
+
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContenido" aria-controls="navbarContenido" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
+
             <div class="collapse navbar-collapse" id="navbarContenido">
-                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                <!-- Enlaces activos solo para usuarios autenticados -->
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 d-none" id="nav-secciones-autenticado">
                     <li class="nav-item">
                         <a class="nav-link active px-3" id="nav-dashboard" href="#" onclick="navegarA('dashboard'); return false;">Dashboard</a>
                     </li>
@@ -75,72 +114,155 @@
                     <li class="nav-item">
                         <a class="nav-link px-3" id="nav-miembros" href="#" onclick="navegarA('miembros'); return false;">Miembros</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3" id="nav-mapa" href="#" onclick="navegarA('mapa'); return false;">🗺️ Visitas y Mapa</a>
+                    </li>
                 </ul>
-                <button class="btn btn-sm btn-outline-light rounded-pill ms-lg-3 mt-2 mt-lg-0 px-3" onclick="exportarDatosJSON()" title="Descargar copia de seguridad en JSON">
-                    💾 Descargar Respaldo
-                </button>
+
+                <!-- Área de usuario y cierre de sesión -->
+                <div class="d-none align-items-center ms-lg-3 mt-2 mt-lg-0 gap-2" id="nav-acciones-autenticado">
+                    <span class="badge bg-secondary-subtle text-light border border-secondary px-3 py-2 rounded-pill small" id="badge-usuario-activo">
+                        👤 <span id="txt-nombre-coordinador">Coordinador</span>
+                    </span>
+                    <button class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="exportarDatosJSON()" title="Descargar copia de seguridad en JSON">
+                        💾 Respaldo
+                    </button>
+                    <button class="btn btn-sm btn-danger rounded-pill px-3" onclick="cerrarSesion()" title="Cerrar sesión de forma segura">
+                        Salir
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
 
     <main class="container mt-4 mb-5">
 
+        <!-- ================= PANTALLA 0: LOGIN Y REGISTRO INSTITUCIONAL ================= -->
+        <section id="vista-auth" class="vista-seccion">
+            <div class="row justify-content-center align-items-center py-4 px-2" style="min-height: 70vh;">
+                <div class="col-12 col-sm-9 col-md-6 col-lg-4" style="max-width: 410px;">
+                    <div class="card shadow-sm rounded-4 border-0 p-4 bg-white">
+                        <!-- Cabecera Institucional -->
+                        <div class="text-center mb-4">
+                            <div class="fs-1 mb-2">🗳️</div>
+                            <h4 class="fw-bold mb-1 text-dark">Gestión de Miembros de Mesa</h4>
+                            <div class="text-primary fw-bold small text-uppercase" style="letter-spacing: 0.5px;">ONPE 2026</div>
+                        </div>
+
+                        <!-- Contenedor de Mensajes / Alertas -->
+                        <div id="auth-alert-container"></div>
+
+                        <!-- PANEL 1: INICIAR SESIÓN -->
+                        <div id="panel-login">
+                            <form id="form-login">
+                                <div class="mb-3">
+                                    <input type="text" class="form-control form-control-lg fs-6 py-2 rounded-3" id="login-usuario" placeholder="Usuario" required autocomplete="username">
+                                </div>
+                                <div class="mb-3">
+                                    <input type="password" class="form-control form-control-lg fs-6 py-2 rounded-3" id="login-password" placeholder="Contraseña" required autocomplete="current-password">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100 py-2 rounded-pill fw-bold shadow-sm" id="btn-submit-login">
+                                    Ingresar
+                                </button>
+                            </form>
+                            <div class="text-center mt-4 pt-2 border-top">
+                                <span class="text-muted small">¿No tienes una cuenta?</span>
+                                <button type="button" class="btn btn-link p-0 ms-1 fw-bold text-decoration-none small text-primary" id="btn-ir-crear-cuenta" onclick="mostrarPanelAuth('registro')">
+                                    Crear cuenta
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- PANEL 2: CREAR CUENTA -->
+                        <div id="panel-registro" class="d-none">
+                            <form id="form-registro">
+                                <div class="mb-2">
+                                    <input type="text" class="form-control form-control-lg fs-6 py-2 rounded-3" id="reg-nombre" placeholder="Nombres y Apellidos" required>
+                                </div>
+                                <div class="mb-2">
+                                    <input type="text" class="form-control form-control-lg fs-6 py-2 rounded-3" id="reg-usuario" placeholder="Usuario" required autocomplete="username">
+                                </div>
+                                <div class="mb-2">
+                                    <input type="password" class="form-control form-control-lg fs-6 py-2 rounded-3" id="reg-password" placeholder="Contraseña" required minlength="6" autocomplete="new-password">
+                                </div>
+                                <div class="mb-3">
+                                    <input type="password" class="form-control form-control-lg fs-6 py-2 rounded-3" id="reg-password-confirm" placeholder="Confirmar contraseña" required minlength="6" autocomplete="new-password">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100 py-2 rounded-pill fw-bold shadow-sm" id="btn-submit-registro">
+                                    Crear cuenta
+                                </button>
+                            </form>
+                            <div class="text-center mt-4 pt-2 border-top">
+                                <span class="text-muted small">¿Ya tienes una cuenta?</span>
+                                <button type="button" class="btn btn-link p-0 ms-1 fw-bold text-decoration-none small text-primary" id="btn-ir-iniciar-sesion" onclick="mostrarPanelAuth('login')">
+                                    Iniciar sesión
+                                </button>
+                            </div>
+                        </div>
+
+                        <p class="text-center text-muted mt-3 mb-0" style="font-size: 0.72rem;">Oficina Nacional de Procesos Electorales · Perú</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- ================= PANTALLA 1: DASHBOARD ================= -->
-        <section id="vista-dashboard" class="vista-seccion">
+        <section id="vista-dashboard" class="vista-seccion d-none">
             <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
                 <div>
                     <h3 class="fw-bold mb-1">Dashboard General</h3>
-                    <p class="text-muted mb-0 small">Centro de información y avance electoral</p>
+                    <p class="text-muted mb-0 small">Centro de control y métricas electorales en tiempo real</p>
                 </div>
-                <!-- Filtro principal por mesa en Dashboard -->
+                <!-- Filtro dinámico por mesa -->
                 <div class="d-flex align-items-center gap-2">
-                    <label for="dashboard-filtro-mesa" class="form-label mb-0 small fw-bold text-nowrap">Filtrar por Mesa:</label>
-                    <select id="dashboard-filtro-mesa" class="form-select form-select-sm">
-                        <option value="">Todas las mesas</option>
-                        <option value="043649">Mesa 043649</option>
-                        <option value="043650">Mesa 043650</option>
-                        <option value="043651">Mesa 043651</option>
+                    <label for="dashboard-filtro-mesa" class="form-label mb-0 small fw-bold text-nowrap">Filtrar Mesa:</label>
+                    <select id="dashboard-filtro-mesa" class="form-select form-select-sm rounded-pill px-3">
+                        <option value="">Todas mis mesas</option>
                     </select>
                 </div>
             </div>
 
-            <!-- Indicadores y Estadísticas -->
+            <!-- Indicadores y Estadísticas (Tarjetas Interactivas con Clic) -->
             <div id="dashboard" class="row mb-4 g-3">
                 <div class="col-6 col-md-3">
-                    <div class="card shadow-sm h-100 bg-primary-subtle rounded-4 border-0">
+                    <div class="card kpi-card shadow-sm h-100 bg-primary-subtle rounded-4 border-0" onclick="irAMiembrosConFiltro('', '')" title="Clic para ver todos los miembros">
                         <div class="card-body text-center p-3">
                             <h6 class="card-title text-uppercase mb-1 text-primary-emphasis" style="font-size: 0.8rem;">Total Miembros</h6>
                             <h2 id="stat-total" class="display-6 fw-bold mb-0 text-primary-emphasis">0</h2>
+                            <small class="text-primary small d-block mt-1">Ver todos &rarr;</small>
                         </div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
-                    <div class="card shadow-sm h-100 bg-success-subtle rounded-4 border-0">
+                    <div class="card kpi-card shadow-sm h-100 bg-success-subtle rounded-4 border-0" onclick="irAMiembrosConFiltro('es-contactado', '')" title="Clic para ver miembros contactados">
                         <div class="card-body text-center p-3">
                             <h6 class="card-title text-uppercase mb-1 text-success-emphasis" style="font-size: 0.8rem;">Contactados</h6>
                             <h2 id="stat-contactados" class="display-6 fw-bold mb-0 text-success-emphasis">0</h2>
+                            <small class="text-success small d-block mt-1">Ver contactados &rarr;</small>
                         </div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
-                    <div class="card shadow-sm h-100 bg-warning-subtle rounded-4 border-0">
+                    <div class="card kpi-card shadow-sm h-100 bg-warning-subtle rounded-4 border-0" onclick="irAMiembrosConFiltro('es-credencial', '')" title="Clic para ver credenciales entregadas">
                         <div class="card-body text-center p-3">
                             <h6 class="card-title text-uppercase mb-1 text-warning-emphasis" style="font-size: 0.8rem;">Credenciales</h6>
                             <h2 id="stat-credenciales" class="display-6 fw-bold mb-0 text-warning-emphasis">0</h2>
+                            <small class="text-warning-emphasis small d-block mt-1">Ver credenciales &rarr;</small>
                         </div>
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
-                    <div class="card shadow-sm h-100 bg-info-subtle rounded-4 border-0">
+                    <div class="card kpi-card shadow-sm h-100 bg-info-subtle rounded-4 border-0" onclick="irAMiembrosConFiltro('es-capacitacion', '')" title="Clic para ver capacitados">
                         <div class="card-body text-center p-3">
                             <h6 class="card-title text-uppercase mb-1 text-info-emphasis" style="font-size: 0.8rem;">Capacitados</h6>
                             <h2 id="stat-capacitados" class="display-6 fw-bold mb-0 text-info-emphasis">0</h2>
+                            <small class="text-info-emphasis small d-block mt-1">Ver capacitados &rarr;</small>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Información de pendientes y avance general -->
+            <!-- Avance general y Pendientes -->
             <div class="row g-3 mb-4">
                 <div class="col-12 col-md-6">
                     <div class="card shadow-sm h-100 rounded-4 border-0 p-3">
@@ -152,24 +274,28 @@
                         <div class="progress mb-3" style="height: 12px;">
                             <div id="stat-barra-progreso" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                         </div>
-                        <p class="small text-muted mb-0">Calculado sobre contacto, credencial y capacitación.</p>
+                        <p class="small text-muted mb-0">Ponderado sobre Contacto, Credencial y Capacitación.</p>
                     </div>
                 </div>
                 <div class="col-12 col-md-6">
                     <div class="card shadow-sm h-100 rounded-4 border-0 p-3">
-                        <h6 class="fw-bold mb-3">Resumen de Pendientes</h6>
+                        <h6 class="fw-bold mb-3">Resumen de Pendientes Operativos</h6>
                         <ul class="list-group list-group-flush small">
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                                <span>Por contactar</span>
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 kpi-card" onclick="irAMiembrosConFiltro('falta-contacto', '')">
+                                <span>📞 Por contactar</span>
                                 <span id="stat-pendiente-contacto" class="badge bg-danger rounded-pill">0</span>
                             </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                                <span>Credenciales por entregar</span>
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 kpi-card" onclick="irAMiembrosConFiltro('falta-credencial', '')">
+                                <span>📄 Credenciales por entregar</span>
                                 <span id="stat-pendiente-credencial" class="badge bg-warning text-dark rounded-pill">0</span>
                             </li>
-                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                                <span>Capacitaciones pendientes</span>
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 kpi-card" onclick="irAMiembrosConFiltro('falta-capacitacion', '')">
+                                <span>🎓 Capacitaciones pendientes</span>
                                 <span id="stat-pendiente-capacitacion" class="badge bg-secondary rounded-pill">0</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 kpi-card" onclick="irAMiembrosConFiltro('visita-pendiente', '')">
+                                <span>🏠 Viviendas pendientes de visita</span>
+                                <span id="stat-pendiente-visita" class="badge bg-info text-dark rounded-pill">0</span>
                             </li>
                         </ul>
                     </div>
@@ -184,48 +310,63 @@
                 <button class="btn btn-primary rounded-pill px-4" onclick="navegarA('miembros')">
                     Ver Gestión de Miembros &rarr;
                 </button>
+                <button class="btn btn-outline-dark rounded-pill px-4" onclick="navegarA('mapa')">
+                    🗺️ Abrir Mapa y Visitas &rarr;
+                </button>
             </div>
         </section>
 
         <!-- ================= PANTALLA 2: GESTIÓN DE MESAS ================= -->
         <section id="vista-mesas" class="vista-seccion d-none">
-            <div class="mb-4">
-                <h3 class="fw-bold mb-1">Gestión de Mesas</h3>
-                <p class="text-muted mb-0 small">Supervisión y estado general por mesa electoral (3 mesas activas)</p>
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                <div>
+                    <h3 class="fw-bold mb-1">Gestión de Mesas</h3>
+                    <p class="text-muted mb-0 small" id="txt-total-mesas-sub">Supervisión y control por mesa electoral asignada</p>
+                </div>
+                <button class="btn btn-primary rounded-pill px-3 btn-sm shadow-sm" onclick="abrirModalNuevaMesa()">
+                    ➕ Registrar Nueva Mesa
+                </button>
             </div>
 
-            <!-- Contenedor de tarjetas por mesa -->
+            <!-- Contenedor dinámico de tarjetas por mesa -->
             <div id="contenedor-mesas" class="row g-3"></div>
         </section>
 
         <!-- ================= PANTALLA 3: GESTIÓN DE MIEMBROS ================= -->
         <section id="vista-miembros" class="vista-seccion d-none">
-            <div class="mb-4">
-                <h3 class="fw-bold mb-1">Gestión de Miembros</h3>
-                <p class="text-muted mb-0 small">Listado detallado y administración de miembros de mesa</p>
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h3 class="fw-bold mb-1">Gestión de Miembros</h3>
+                    <p class="text-muted mb-0 small">Administración, seguimiento y contacto individual</p>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-success btn-sm rounded-pill px-3 shadow-sm" onclick="abrirModalEscanearCredencial()">
+                        📷 Escanear Credencial
+                    </button>
+                    <button class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" onclick="abrirModalNuevoMiembro()">
+                        ➕ Agregar Miembro
+                    </button>
+                </div>
             </div>
 
             <!-- Filtros y Búsqueda -->
             <div class="card mb-4 rounded-4 border-0 shadow-sm">
                 <div class="card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
-                            <label for="input-busqueda" class="form-label">Buscar</label>
-                            <input type="text" id="input-busqueda" class="form-control form-control-sm" placeholder="Buscar por DNI o Nombre...">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-md-3">
+                            <label for="input-busqueda" class="form-label small fw-bold mb-1">Buscar (DNI, Nombre o Dirección)</label>
+                            <input type="text" id="input-busqueda" class="form-control form-control-sm rounded-pill px-3" placeholder="Ej. 07632026, Sinchi Roca, Andrea...">
                         </div>
-                        <div class="col-md-2">
-                            <label for="filtro-mesa" class="form-label">Mesa</label>
-                            <select id="filtro-mesa" class="form-select form-select-sm">
+                        <div class="col-6 col-md-2">
+                            <label for="filtro-mesa" class="form-label small fw-bold mb-1">Mesa</label>
+                            <select id="filtro-mesa" class="form-select form-select-sm rounded-pill">
                                 <option value="">Todas</option>
-                                <option value="043649">043649</option>
-                                <option value="043650">043650</option>
-                                <option value="043651">043651</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label for="filtro-cargo" class="form-label">Cargo</label>
-                            <select id="filtro-cargo" class="form-select form-select-sm">
-                                <option value="">Todos</option>
+                        <div class="col-6 col-md-2">
+                            <label for="filtro-cargo" class="form-label small fw-bold mb-1">Cargo</label>
+                            <select id="filtro-cargo" class="form-select form-select-sm rounded-pill">
+                                <option value="">Todos los cargos</option>
                                 <option value="Presidente">Presidente</option>
                                 <option value="Secretaria">Secretaria</option>
                                 <option value="Tercer Miembro">Tercer Miembro</option>
@@ -237,18 +378,24 @@
                                 <option value="Sexto Suplente">Sexto Suplente</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label for="filtro-estado" class="form-label">Estado</label>
-                            <select id="filtro-estado" class="form-select form-select-sm">
+                        <div class="col-8 col-md-3">
+                            <label for="filtro-estado" class="form-label small fw-bold mb-1">Estado / Visita</label>
+                            <select id="filtro-estado" class="form-select form-select-sm rounded-pill">
                                 <option value="">Todos los estados</option>
-                                <optgroup label="✅ Cumplidos">
+                                <optgroup label="🏠 Visitas Domiciliarias">
+                                    <option value="visita-realizada">Vivienda visitada</option>
+                                    <option value="visita-pendiente">Pendiente de visita</option>
+                                    <option value="visita-segunda">Requiere 2da visita</option>
+                                    <option value="visita-obs">Visita con observaciones</option>
+                                </optgroup>
+                                <optgroup label="✅ Cumplidos ONPE">
                                     <option value="es-contactado">Contactados</option>
                                     <option value="es-credencial">Credencial entregada</option>
                                     <option value="es-capacitacion">Capacitados</option>
                                     <option value="completado-todo">Todo completado (3/3)</option>
                                     <option value="vive-aqui">Vive en dirección</option>
                                 </optgroup>
-                                <optgroup label="⏳ Pendientes">
+                                <optgroup label="⏳ Pendientes ONPE">
                                     <option value="falta-contacto">Falta Contacto</option>
                                     <option value="falta-credencial">Falta Credencial</option>
                                     <option value="falta-capacitacion">Falta Capacitación</option>
@@ -256,65 +403,162 @@
                                 </optgroup>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <button id="btn-limpiar" class="btn btn-outline-secondary btn-sm w-100">Limpiar Filtros</button>
+                        <div class="col-4 col-md-2">
+                            <button id="btn-limpiar" class="btn btn-outline-secondary btn-sm w-100 rounded-pill">Limpiar</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Contenedor de miembros -->
+            <!-- Contenedor dinámico de miembros -->
             <div id="contenedor-miembros" class="row g-3"></div>
+        </section>
+
+        <!-- ================= PANTALLA 4: MAPA Y PLANIFICACIÓN DE VISITAS ================= -->
+        <section id="vista-mapa" class="vista-seccion d-none">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h3 class="fw-bold mb-1">🗺️ Mapa y Planificación de Visitas</h3>
+                    <p class="text-muted mb-0 small">Geolocalización directa, navegación GPS e itinerarios con Google Maps</p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label for="mapa-filtro-mesa" class="form-label mb-0 small fw-bold">Mesa:</label>
+                    <select id="mapa-filtro-mesa" class="form-select form-select-sm rounded-pill" onchange="renderizarMapaVisitas()">
+                        <option value="">Todas las mesas</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Resumen de Visitas en Campo -->
+            <div class="row g-3 mb-4">
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Direcciones registradas</small>
+                        <h4 class="fw-bold mb-0 text-primary" id="mapa-stat-total-dir">0</h4>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Viviendas visitadas</small>
+                        <h4 class="fw-bold mb-0 text-success" id="mapa-stat-visitados">0</h4>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Pendientes de visita</small>
+                        <h4 class="fw-bold mb-0 text-danger" id="mapa-stat-pendientes">0</h4>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card shadow-sm rounded-4 border-0 p-3 bg-white text-center">
+                        <small class="text-muted d-block mb-1">Requieren 2da visita</small>
+                        <h4 class="fw-bold mb-0 text-warning" id="mapa-stat-segunda">0</h4>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de Generación de Rutas en Google Maps -->
+            <div class="card rounded-4 border-0 shadow-sm p-3 mb-4 bg-primary-subtle">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h6 class="fw-bold mb-1 text-primary-emphasis">🚗 Planificador de Recorrido de Campo</h6>
+                        <p class="small text-primary-emphasis mb-0">Selecciona miembros pendientes y genera una ruta optimizada en Google Maps.</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-primary btn-sm rounded-pill" onclick="seleccionarTodosParaRuta(true)">Marcar Todos</button>
+                        <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="seleccionarTodosParaRuta(false)">Desmarcar</button>
+                        <button class="btn btn-primary btn-sm rounded-pill px-3 fw-bold" onclick="abrirRutaOptimizadaGoogleMaps()">
+                            🚀 Abrir Ruta en Google Maps
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Listado con soporte de Geolocalización individual -->
+            <div class="card rounded-4 border-0 shadow-sm p-3">
+                <h6 class="fw-bold mb-3">Directorio Geográfico de Miembros</h6>
+                <div id="contenedor-lista-mapa" class="row g-3"></div>
+            </div>
         </section>
 
     </main>
 
-    <!-- Modal Gestión -->
-    <div class="modal fade" id="modalGestion" tabindex="-1" aria-labelledby="modalGestionLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+    <!-- ================= MODAL 1: FICHA DE CONSULTA COMPLETA (CLIC EN TARJETA) ================= -->
+    <div class="modal fade" id="modalDetalleMiembro" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content border-0 shadow-lg rounded-4">
                 <div class="modal-header bg-dark text-white rounded-top-4">
-                    <h5 class="modal-title fs-6 fw-bold" id="modalGestionLabel">📋 Ficha del Miembro de Mesa</h5>
+                    <h5 class="modal-title fs-6 fw-bold" id="modalDetalleLabel">📋 Ficha de Consulta del Miembro de Mesa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-4" id="detalle-miembro-body">
+                    <!-- Contenido dinámico inyectado por JS -->
+                </div>
+                <div class="modal-footer bg-light rounded-bottom-4 py-2 d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cerrar</button>
+                    <div class="d-flex gap-2" id="detalle-acciones-footer">
+                        <!-- Botón de editar inyectado por JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 2: GESTIONAR / EDITAR MIEMBRO ================= -->
+    <div class="modal fade" id="modalGestion" tabindex="-1" aria-labelledby="modalGestionLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header bg-primary text-white rounded-top-4">
+                    <h5 class="modal-title fs-6 fw-bold" id="modalGestionLabel">✏️ Editar y Gestionar Miembro de Mesa</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body p-4">
                     <form id="form-gestion">
                         <input type="hidden" id="gestion-id">
 
-                        <!-- Información de Asignación (Mesa y Cargo) -->
-                        <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded-3 border">
-                            <div>
-                                <small class="text-muted d-block">Mesa de Sufragio</small>
-                                <span class="fw-bold" id="gestion-mesa-badge">043649</span>
+                        <!-- Asignación -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label for="gestion-mesa-select" class="form-label small fw-bold mb-1">Mesa de Sufragio</label>
+                                <select id="gestion-mesa-select" class="form-select form-select-sm" required></select>
                             </div>
-                            <div class="text-end">
-                                <small class="text-muted d-block">Cargo Asignado</small>
-                                <span class="badge bg-primary rounded-pill px-3 py-1" id="gestion-cargo-badge">Presidente</span>
+                            <div class="col-6">
+                                <label for="gestion-cargo-select" class="form-label small fw-bold mb-1">Cargo Asignado</label>
+                                <select id="gestion-cargo-select" class="form-select form-select-sm" required>
+                                    <option value="Presidente">Presidente</option>
+                                    <option value="Secretaria">Secretaria</option>
+                                    <option value="Tercer Miembro">Tercer Miembro</option>
+                                    <option value="Primer Suplente">Primer Suplente</option>
+                                    <option value="Segundo Suplente">Segundo Suplente</option>
+                                    <option value="Tercer Suplente">Tercer Suplente</option>
+                                    <option value="Cuarto Suplente">Cuarto Suplente</option>
+                                    <option value="Quinto Suplente">Quinto Suplente</option>
+                                    <option value="Sexto Suplente">Sexto Suplente</option>
+                                    <option value="Suplente General">Suplente General</option>
+                                </select>
                             </div>
                         </div>
 
-                        <!-- Datos Personales Reales -->
+                        <!-- Datos Personales -->
                         <h6 class="fw-bold text-primary mb-2 small text-uppercase">1. Datos Personales (Credencial)</h6>
                         <div class="mb-2">
-                            <label class="form-label small fw-bold mb-1">Apellidos y Nombres</label>
+                            <label for="gestion-nombre" class="form-label small fw-bold mb-1">Apellidos y Nombres</label>
                             <input type="text" id="gestion-nombre" class="form-control form-control-sm" placeholder="Ej. CALMET DEL CASTILLO, ERICK OMAR" required>
                         </div>
                         <div class="row g-2 mb-2">
                             <div class="col-6">
-                                <label class="form-label small fw-bold mb-1">DNI (8 dígitos)</label>
+                                <label for="gestion-dni" class="form-label small fw-bold mb-1">DNI (8 dígitos)</label>
                                 <input type="text" id="gestion-dni" class="form-control form-control-sm" placeholder="Ej. 07632026" maxlength="8">
                             </div>
                             <div class="col-6">
-                                <label class="form-label small fw-bold mb-1">Teléfono (Opcional)</label>
+                                <label for="gestion-telefono" class="form-label small fw-bold mb-1">Teléfono Móvil</label>
                                 <input type="tel" id="gestion-telefono" class="form-control form-control-sm" placeholder="Ej. 987654321">
                             </div>
                         </div>
-
                         <div class="mb-2">
-                            <label class="form-label small fw-bold mb-1">Dirección según Credencial</label>
-                            <input type="text" id="gestion-direccion" class="form-control form-control-sm" placeholder="Ej. JR. SINCHI ROCA 2685">
+                            <label for="gestion-direccion" class="form-label small fw-bold mb-1">Dirección según Credencial</label>
+                            <input type="text" id="gestion-direccion" class="form-control form-control-sm" placeholder="Ej. Jr. Sinchi Roca 2685, Lince">
                         </div>
-
                         <div class="form-check form-switch mb-3 p-2 bg-light rounded border">
                             <input class="form-check-input ms-0 me-2" type="checkbox" id="check-vive-direccion">
                             <label class="form-check-label small fw-bold" for="check-vive-direccion">¿Vive actualmente en esta dirección?</label>
@@ -322,43 +566,304 @@
 
                         <hr class="my-3">
 
-                        <!-- Estado de Actividades ONPE -->
-                        <h6 class="fw-bold text-primary mb-2 small text-uppercase">2. Estado de Actividades ONPE</h6>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="check-contactado">
-                            <label class="form-check-label small" for="check-contactado">Contactado / Notificado</label>
+                        <!-- Registro de Visitas Domiciliarias -->
+                        <h6 class="fw-bold text-primary mb-2 small text-uppercase">2. Registro de Visita Domiciliaria</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-12 col-md-6">
+                                <div class="form-check form-switch p-2 bg-light rounded border mb-2">
+                                    <input class="form-check-input ms-0 me-2" type="checkbox" id="check-visita-realizada">
+                                    <label class="form-check-label small fw-bold" for="check-visita-realizada">Vivienda visitada: Sí / No</label>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="select-visita-estado" class="form-label small fw-bold mb-1">Estado de Visita</label>
+                                <select id="select-visita-estado" class="form-select form-select-sm">
+                                    <option value="no_visitado">No visitado</option>
+                                    <option value="visitado">Visita realizada con éxito</option>
+                                    <option value="segunda_visita">Segunda visita requerida</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="check-credencial">
-                            <label class="form-check-label small" for="check-credencial">Credencial entregada</label>
-                        </div>
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" id="check-capacitacion">
-                            <label class="form-check-label small" for="check-capacitacion">Capacitación completada</label>
+                        <div class="row g-2 mb-2">
+                            <div class="col-12 col-md-6">
+                                <label for="gestion-visita-fecha" class="form-label small fw-bold mb-1">Fecha y Hora de Visita</label>
+                                <input type="datetime-local" id="gestion-visita-fecha" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="gestion-visita-obs" class="form-label small fw-bold mb-1">Observaciones de la Visita</label>
+                                <input type="text" id="gestion-visita-obs" class="form-control form-control-sm" placeholder="Ej. Se dejó aviso bajo puerta / familiar atendió">
+                            </div>
                         </div>
 
-                        <!-- Observaciones -->
+                        <hr class="my-3">
+
+                        <!-- Estado de Actividades ONPE -->
+                        <h6 class="fw-bold text-primary mb-2 small text-uppercase">3. Estado de Actividades ONPE</h6>
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <div class="form-check form-switch p-2 bg-light rounded border">
+                                    <input class="form-check-input ms-0 me-2" type="checkbox" id="check-contactado">
+                                    <label class="form-check-label small" for="check-contactado">Contactado</label>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="form-check form-switch p-2 bg-light rounded border">
+                                    <input class="form-check-input ms-0 me-2" type="checkbox" id="check-credencial">
+                                    <label class="form-check-label small" for="check-credencial">Credencial</label>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="form-check form-switch p-2 bg-light rounded border">
+                                    <input class="form-check-input ms-0 me-2" type="checkbox" id="check-capacitacion">
+                                    <label class="form-check-label small" for="check-capacitacion">Capacitado</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Observaciones Generales -->
                         <div class="mb-0">
-                            <label for="text-observaciones" class="form-label small fw-bold mb-1">Observaciones</label>
-                            <textarea id="text-observaciones" class="form-control form-control-sm" rows="2" placeholder="Ej. Se mudó, vive familiar, no tiene número propio, etc."></textarea>
+                            <label for="text-observaciones" class="form-label small fw-bold mb-1">Observaciones Generales de Campo</label>
+                            <textarea id="text-observaciones" class="form-control form-control-sm" rows="2" placeholder="Ej. No tiene teléfono personal / Disponible fines de semana"></textarea>
                         </div>
                     </form>
                 </div>
-                <div class="modal-footer bg-light rounded-bottom-4 py-2">
-                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" form="form-gestion" class="btn btn-primary btn-sm rounded-pill px-4">Guardar Datos</button>
+                <div class="modal-footer bg-light rounded-bottom-4 py-2 d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="confirmarEliminarMiembro()">🗑️ Eliminar</button>
+                    <div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3 me-2" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" form="form-gestion" class="btn btn-primary btn-sm rounded-pill px-4">Guardar Cambios</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS Bundle (local con fallback CDN sin hash SRI conflictivo) -->
+    <!-- ================= MODAL 3: REGISTRAR NUEVA MESA ================= -->
+    <div class="modal fade" id="modalMesa" tabindex="-1" aria-labelledby="modalMesaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header bg-dark text-white rounded-top-4">
+                    <h5 class="modal-title fs-6 fw-bold" id="modalMesaLabel">➕ Registrar Nueva Mesa Electoral</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form id="form-mesa">
+                        <div class="mb-3">
+                            <label for="nueva-mesa-numero" class="form-label small fw-bold">Número de Mesa (6 dígitos)</label>
+                            <input type="text" id="nueva-mesa-numero" class="form-control" placeholder="Ej. 052001" maxlength="6" pattern="\d{6}" required>
+                            <div class="form-text small">Debe ser un número de mesa de 6 dígitos numéricos.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="nueva-mesa-local" class="form-label small fw-bold">Local de Votación (Opcional)</label>
+                            <input type="text" id="nueva-mesa-local" class="form-control" placeholder="Ej. I.E. Alfonso Ugarte">
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label for="nueva-mesa-distrito" class="form-label small fw-bold">Distrito</label>
+                                <input type="text" id="nueva-mesa-distrito" class="form-control" placeholder="Ej. San Isidro">
+                            </div>
+                            <div class="col-6">
+                                <label for="nueva-mesa-aula" class="form-label small fw-bold">Pabellón / Aula</label>
+                                <input type="text" id="nueva-mesa-aula" class="form-control" placeholder="Ej. Aula 204">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-light rounded-bottom-4 py-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="form-mesa" class="btn btn-primary btn-sm rounded-pill px-4">Guardar Mesa</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 4: AGREGAR MIEMBRO MANUALMENTE ================= -->
+    <div class="modal fade" id="modalNuevoMiembro" tabindex="-1" aria-labelledby="modalNuevoMiembroLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header bg-dark text-white rounded-top-4">
+                    <h5 class="modal-title fs-6 fw-bold" id="modalNuevoMiembroLabel">➕ Agregar Nuevo Miembro de Mesa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form id="form-nuevo-miembro">
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label for="nuevo-miembro-mesa" class="form-label small fw-bold mb-1">Mesa</label>
+                                <select id="nuevo-miembro-mesa" class="form-select form-select-sm" required></select>
+                            </div>
+                            <div class="col-6">
+                                <label for="nuevo-miembro-cargo" class="form-label small fw-bold mb-1">Cargo</label>
+                                <select id="nuevo-miembro-cargo" class="form-select form-select-sm" required>
+                                    <option value="Presidente">Presidente</option>
+                                    <option value="Secretaria">Secretaria</option>
+                                    <option value="Tercer Miembro">Tercer Miembro</option>
+                                    <option value="Primer Suplente">Primer Suplente</option>
+                                    <option value="Segundo Suplente">Segundo Suplente</option>
+                                    <option value="Tercer Suplente">Tercer Suplente</option>
+                                    <option value="Cuarto Suplente">Cuarto Suplente</option>
+                                    <option value="Quinto Suplente">Quinto Suplente</option>
+                                    <option value="Sexto Suplente">Sexto Suplente</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label for="nuevo-miembro-nombre" class="form-label small fw-bold mb-1">Apellidos y Nombres</label>
+                            <input type="text" id="nuevo-miembro-nombre" class="form-control form-control-sm" placeholder="Ej. PEREZ ROJAS, CARLOS" required>
+                        </div>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label for="nuevo-miembro-dni" class="form-label small fw-bold mb-1">DNI (8 dígitos)</label>
+                                <input type="text" id="nuevo-miembro-dni" class="form-control form-control-sm" placeholder="8 dígitos" maxlength="8">
+                            </div>
+                            <div class="col-6">
+                                <label for="nuevo-miembro-telefono" class="form-label small fw-bold mb-1">Teléfono</label>
+                                <input type="tel" id="nuevo-miembro-telefono" class="form-control form-control-sm" placeholder="Ej. 987654321">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nuevo-miembro-direccion" class="form-label small fw-bold mb-1">Dirección según Credencial</label>
+                            <input type="text" id="nuevo-miembro-direccion" class="form-control form-control-sm" placeholder="Ej. Av. Arequipa 1234">
+                        </div>
+
+                        <div class="form-check form-switch p-2 bg-light rounded border mb-0">
+                            <input class="form-check-input ms-0 me-2" type="checkbox" id="nuevo-check-vive">
+                            <label class="form-check-label small" for="nuevo-check-vive">¿Vive en esta dirección?</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-light rounded-bottom-4 py-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="form-nuevo-miembro" class="btn btn-primary btn-sm rounded-pill px-4">Guardar Miembro</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 5: ESCANEAR CREDENCIAL CON CÁMARA / OCR ================= -->
+    <div class="modal fade" id="modalEscanearCredencial" tabindex="-1" aria-labelledby="modalScannerLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header bg-dark text-white rounded-top-4">
+                    <h5 class="modal-title fs-6 fw-bold" id="modalScannerLabel">📷 Escáner de Credenciales de Miembro de Mesa</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar" onclick="detenerCamaraStream()"></button>
+                </div>
+                <div class="modal-body p-4">
+
+                    <!-- Opciones de Captura -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-12 col-md-6">
+                            <div class="p-3 bg-light rounded-4 text-center border h-100 d-flex flex-column justify-content-center">
+                                <h6 class="fw-bold mb-2">📸 Foto o Galería del Celular</h6>
+                                <p class="small text-muted mb-3">Toma una foto clara a la credencial oficial ONPE.</p>
+                                <label class="btn btn-primary btn-sm rounded-pill px-4 py-2 mx-auto">
+                                    <span>Seleccionar / Tomar Foto</span>
+                                    <input type="file" id="input-archivo-scanner" accept="image/*" capture="environment" style="display: none;" onchange="procesarFotoArchivo(event)">
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="p-3 bg-light rounded-4 text-center border h-100 d-flex flex-column justify-content-center">
+                                <h6 class="fw-bold mb-2">📹 Cámara en Vivo</h6>
+                                <p class="small text-muted mb-3">Enfoca la credencial directamente con tu cámara web o móvil.</p>
+                                <div class="d-flex gap-2 justify-content-center">
+                                    <button class="btn btn-outline-primary btn-sm rounded-pill px-3" id="btn-iniciar-camara" onclick="iniciarCamaraStream()">Activar Cámara</button>
+                                    <button class="btn btn-success btn-sm rounded-pill px-3 d-none" id="btn-capturar-frame" onclick="capturarFrameCamara()">Capturar Credencial</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vista previa de cámara en vivo si se activa -->
+                    <div id="contenedor-stream-cam" class="scanner-overlay mb-3 d-none">
+                        <video id="video-preview-cam" autoplay playsinline></video>
+                        <div class="scanner-guide"></div>
+                    </div>
+
+                    <!-- Indicador de progreso de OCR -->
+                    <div id="scanner-progress-container" class="mb-3 d-none">
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span id="scanner-status-text">Analizando credencial con OCR...</span>
+                            <span id="scanner-progress-percent">0%</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div id="scanner-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Formulario de Vista Previa de Datos Extraídos (Regla: no inventar datos) -->
+                    <div id="scanner-resultado-container" class="card p-3 rounded-4 border bg-light d-none">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold text-success mb-0">🔍 Datos Detectados en la Credencial</h6>
+                            <span class="badge bg-success-subtle text-success-emphasis rounded-pill">Verifica y completa</span>
+                        </div>
+                        <form id="form-scanner-guardar">
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label for="ocr-mesa" class="form-label small fw-bold mb-1">Mesa</label>
+                                    <select id="ocr-mesa" class="form-select form-select-sm" required></select>
+                                </div>
+                                <div class="col-6">
+                                    <label for="ocr-cargo" class="form-label small fw-bold mb-1">Cargo Detectado</label>
+                                    <select id="ocr-cargo" class="form-select form-select-sm" required>
+                                        <option value="Presidente">Presidente</option>
+                                        <option value="Secretaria">Secretaria</option>
+                                        <option value="Tercer Miembro">Tercer Miembro</option>
+                                        <option value="Primer Suplente">Primer Suplente</option>
+                                        <option value="Segundo Suplente">Segundo Suplente</option>
+                                        <option value="Tercer Suplente">Tercer Suplente</option>
+                                        <option value="Cuarto Suplente">Cuarto Suplente</option>
+                                        <option value="Quinto Suplente">Quinto Suplente</option>
+                                        <option value="Sexto Suplente">Sexto Suplente</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <label for="ocr-nombre" class="form-label small fw-bold mb-1">Apellidos y Nombres</label>
+                                <input type="text" id="ocr-nombre" class="form-control form-control-sm" placeholder="(No detectado - ingresar manualmente)" required>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label for="ocr-dni" class="form-label small fw-bold mb-1">DNI</label>
+                                    <input type="text" id="ocr-dni" class="form-control form-control-sm" placeholder="(No detectado - 8 dígitos)" maxlength="8">
+                                </div>
+                                <div class="col-6">
+                                    <label for="ocr-telefono" class="form-label small fw-bold mb-1">Teléfono (Manual)</label>
+                                    <input type="tel" id="ocr-telefono" class="form-control form-control-sm" placeholder="Ingresar número celular">
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <label for="ocr-direccion" class="form-label small fw-bold mb-1">Dirección Detectada</label>
+                                <input type="text" id="ocr-direccion" class="form-control form-control-sm" placeholder="(No detectada - ingresar manualmente)">
+                            </div>
+                            <div class="text-end mt-3">
+                                <button type="submit" class="btn btn-success btn-sm rounded-pill px-4 fw-bold">
+                                    💾 Confirmar y Guardar Miembro
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                </div>
+                <div class="modal-footer bg-light rounded-bottom-4 py-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal" onclick="detenerCamaraStream()">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle con fallback CDN -->
     <script src="bootstrap.bundle.min.js"></script>
     <script>
         if (typeof bootstrap === 'undefined') {
             document.write('<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"><\/script>');
         }
     </script>
+    <!-- Tesseract.js para OCR cliente de credenciales -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
