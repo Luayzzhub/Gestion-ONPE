@@ -521,6 +521,115 @@ const server = http.createServer(async (req, res) => {
                 });
             }
 
+            // H. POST /api/backup/import (Importar Respaldo JSON o datos de demo)
+            if (pathname === '/api/backup/import' && req.method === 'POST') {
+                const coord = autenticarRequest(req);
+                if (!coord) return responderJSON(res, 401, { error: "No autorizado" });
+
+                const body = await leerJSONBody(req);
+                let importMesas = [];
+                let importMiembros = [];
+
+                if (Array.isArray(body)) {
+                    importMiembros = body;
+                } else if (body && typeof body === 'object') {
+                    importMesas = Array.isArray(body.mesas) ? body.mesas : [];
+                    importMiembros = Array.isArray(body.miembros) ? body.miembros : [];
+                }
+
+                // Deducir mesas si no se especificaron explícitamente
+                if (importMesas.length === 0 && importMiembros.length > 0) {
+                    const numerosMesas = [...new Set(importMiembros.map(m => (m.mesa || '').trim()).filter(Boolean))];
+                    importMesas = numerosMesas.map(num => ({
+                        numero: num,
+                        localVotacion: 'Colegio Scipion E. Llona',
+                        distrito: 'Miraflores',
+                        aula: 'Aula 1'
+                    }));
+                }
+
+                db.exec('BEGIN TRANSACTION');
+                try {
+                    // 1. Insertar mesas que no existan
+                    for (const m of importMesas) {
+                        const num = (m.numero || '').trim();
+                        if (!num) continue;
+                        const existingMesa = db.prepare(`SELECT id FROM mesas WHERE coordinador_id = ? AND numero = ?`).get(coord.id, num);
+                        if (!existingMesa) {
+                            const mesaId = "mesa_" + Date.now() + "_" + crypto.randomBytes(3).toString('hex');
+                            db.prepare(`
+                                INSERT INTO mesas (id, coordinador_id, numero, local_votacion, distrito, aula)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            `).run(mesaId, coord.id, num, m.localVotacion || 'Local de Votación', m.distrito || 'Lima', m.aula || 'Aula 1');
+                        }
+                    }
+
+                    // 2. Insertar o actualizar miembros
+                    for (const m of importMiembros) {
+                        const mesaNum = (m.mesa || '').trim();
+                        const cargo = (m.cargo || '').trim();
+                        if (!mesaNum || !cargo) continue;
+
+                        const existing = db.prepare(`SELECT id FROM miembros WHERE coordinador_id = ? AND mesa = ? AND cargo = ?`).get(coord.id, mesaNum, cargo);
+                        const mid = existing ? existing.id : ("m_" + Date.now() + "_" + crypto.randomBytes(4).toString('hex'));
+
+                        const cap1 = m.capacitacion1 ? 1 : 0;
+                        const cap2 = m.capacitacion2 ? 1 : 0;
+                        const capGen = (m.capacitacion || cap1 || cap2) ? 1 : 0;
+
+                        if (existing) {
+                            db.prepare(`
+                                UPDATE miembros SET
+                                    nombre = ?, dni = ?, telefono = ?, direccion = ?,
+                                    vive_en_direccion = ?, contactado = ?, credencial = ?,
+                                    capacitacion = ?, capacitacion_1 = ?, capacitacion_2 = ?,
+                                    asiste_elecciones = ?, visita_realizada = ?, visita_estado = ?,
+                                    visita_fecha = ?, visita_observaciones = ?, observaciones = ?,
+                                    updated_at = datetime('now')
+                                WHERE id = ? AND coordinador_id = ?
+                            `).run(
+                                (m.nombre || '').trim(), (m.dni || '').trim(), (m.telefono || '').trim(), (m.direccion || '').trim(),
+                                m.viveEnDireccion ? 1 : 0, m.contactado ? 1 : 0, m.credencial ? 1 : 0,
+                                capGen, cap1, cap2, m.asisteElecciones || 'pendiente',
+                                m.visitaRealizada ? 1 : 0, m.visitaEstado || 'no_visitado',
+                                m.visitaFecha || '', m.visitaObservaciones || '', m.observaciones || '',
+                                mid, coord.id
+                            );
+                        } else {
+                            db.prepare(`
+                                INSERT INTO miembros (
+                                    id, coordinador_id, mesa, cargo, nombre, dni, telefono, direccion,
+                                    vive_en_direccion, contactado, credencial, capacitacion, capacitacion_1, capacitacion_2,
+                                    asiste_elecciones, visita_realizada, visita_estado, visita_fecha, visita_observaciones,
+                                    observaciones
+                                ) VALUES (
+                                    ?, ?, ?, ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?,
+                                    ?, ?, ?, ?, ?, ?
+                                )
+                            `).run(
+                                mid, coord.id, mesaNum, cargo,
+                                (m.nombre || '').trim(), (m.dni || '').trim(), (m.telefono || '').trim(), (m.direccion || '').trim(),
+                                m.viveEnDireccion ? 1 : 0, m.contactado ? 1 : 0, m.credencial ? 1 : 0,
+                                capGen, cap1, cap2, m.asisteElecciones || 'pendiente',
+                                m.visitaRealizada ? 1 : 0, m.visitaEstado || 'no_visitado',
+                                m.visitaFecha || '', m.visitaObservaciones || '', m.observaciones || ''
+                            );
+                        }
+                    }
+                    db.exec('COMMIT');
+                } catch (e) {
+                    try { db.exec('ROLLBACK'); } catch(rbErr) {}
+                    throw e;
+                }
+
+                return responderJSON(res, 200, {
+                    success: true,
+                    mesasImportadas: importMesas.length,
+                    miembrosImportados: importMiembros.length
+                });
+            }
+
             return responderJSON(res, 404, { error: "Endpoint no encontrado" });
         } catch (err) {
             console.error("Error en API:", err);

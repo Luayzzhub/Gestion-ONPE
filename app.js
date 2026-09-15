@@ -458,12 +458,18 @@ function renderizarMesas() {
     if (mesas.length === 0) {
         contenedor.innerHTML = `
             <div class="col-12 text-center py-5">
-                <div class="p-4 bg-white rounded-4 shadow-sm border">
+                <div class="p-4 bg-white rounded-4 shadow-sm border mx-auto" style="max-width: 600px;">
+                    <div class="fs-1 mb-2">📋</div>
                     <h5 class="fw-bold mb-2">No tienes mesas electorales registradas aún</h5>
-                    <p class="text-muted mb-3 small">Registra los números de mesa asignados a tu coordinación.</p>
-                    <button class="btn btn-primary rounded-pill px-4 shadow-sm" onclick="abrirModalNuevaMesa()">
-                        ➕ Registrar Mesa
-                    </button>
+                    <p class="text-muted mb-4 small">Puedes registrar una nueva mesa manualmente o cargar directamente los datos de la primera demo oficial (27 miembros).</p>
+                    <div class="d-flex justify-content-center gap-2 flex-wrap">
+                        <button class="btn btn-primary rounded-pill px-4 shadow-sm" onclick="abrirModalNuevaMesa()">
+                            ➕ Registrar Mesa
+                        </button>
+                        <button class="btn btn-outline-primary rounded-pill px-4 shadow-sm" onclick="cargarDatosDemoInicial()">
+                            ⚡ Cargar Demo Inicial (27 miembros)
+                        </button>
+                    </div>
                 </div>
             </div>`;
         return;
@@ -1465,6 +1471,108 @@ async function exportarDatosJSON() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+// ==========================================
+// 12.1 IMPORTACIÓN DE RESPALDO Y CARGA DE DEMO
+// ==========================================
+
+// Abrir selector de archivo para importar JSON
+function abrirSelectorImportarJSON() {
+    if (!sesionActiva.autenticado) {
+        alert("Debes iniciar sesión para importar un archivo de respaldo.");
+        return;
+    }
+    const input = document.getElementById("input-archivo-importar");
+    if (input) {
+        input.value = "";
+        input.click();
+    }
+}
+
+// Procesar archivo JSON subido por el usuario
+async function procesarArchivoImportar(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+        const text = await file.text();
+        const json = JSON.parse(text);
+        if (!confirm(`¿Deseas importar los datos del archivo "${file.name}" a tu cuenta de coordinador?`)) {
+            return;
+        }
+        await importarDatosPayload(json, file.name);
+    } catch (err) {
+        alert("El archivo seleccionado no es un JSON válido o está dañado: " + err.message);
+    }
+}
+
+// Enviar datos de importación a la API centralizada
+async function importarDatosPayload(payload, fuente = "Respaldo") {
+    if (!sesionActiva.autenticado) return;
+
+    const resp = await apiFetch('/api/backup/import', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+
+    if (resp.ok && resp.data && resp.data.success) {
+        alert(`✅ ¡Importación completada con éxito!\n\nSe sincronizaron ${resp.data.mesasImportadas} mesa(s) y ${resp.data.miembrosImportados} miembro(s) en tu cuenta.`);
+        await cargarDatosDesdeServidor();
+        sincronizarTodoUI();
+    } else {
+        alert("❌ Error al importar los datos: " + (resp.data?.error || resp.error || "No se pudo procesar la solicitud"));
+    }
+}
+
+// Cargar datos de la Demo Inicial (detectando datos previos en LocalStorage o usando la base oficial)
+async function cargarDatosDemoInicial() {
+    if (!sesionActiva.autenticado) {
+        alert("Debes iniciar sesión para cargar datos a tu cuenta.");
+        return;
+    }
+
+    // 1. Revisar si existen datos antiguos en el LocalStorage de este navegador
+    const datosLocalesPrevios = localStorage.getItem("miembrosMesaData");
+    let payload = null;
+
+    if (datosLocalesPrevios) {
+        try {
+            const parsed = JSON.parse(datosLocalesPrevios);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const deseaUsarLocales = confirm(
+                    `ℹ️ Se detectaron ${parsed.length} miembros guardados en este navegador de la primera demo (con posibles gestiones, notas o visitas que registraste).\n\n` +
+                    `¿Deseas importar tus datos guardados localmente?\n` +
+                    `• Aceptar: Importa tus datos con las modificaciones previas.\n` +
+                    `• Cancelar: Carga la base oficial limpia de la demo (27 miembros de Mesas 043649, 043650, 043651).`
+                );
+                if (deseaUsarLocales) {
+                    payload = parsed;
+                }
+            }
+        } catch (e) {
+            console.warn("No se pudo parsear miembrosMesaData de localStorage:", e);
+        }
+    }
+
+    // 2. Si no se seleccionó el local, cargar el archivo oficial de respaldo demo inicial
+    if (!payload) {
+        try {
+            const res = await fetch('/respaldo_demo_inicial.json');
+            if (res.ok) {
+                payload = await res.json();
+            }
+        } catch (e) {
+            console.error("Error al cargar /respaldo_demo_inicial.json:", e);
+        }
+    }
+
+    if (!payload) {
+        alert("No se pudo cargar el archivo de datos de la demo.");
+        return;
+    }
+
+    await importarDatosPayload(payload, "Demo Oficial ONPE");
 }
 
 // ==========================================

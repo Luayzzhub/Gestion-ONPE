@@ -142,6 +142,10 @@
                     <button class="btn btn-sm btn-outline-light rounded-pill px-3" onclick="exportarDatosJSON()" title="Descargar copia de seguridad en JSON">
                         💾 Respaldo
                     </button>
+                    <button class="btn btn-sm btn-outline-info rounded-pill px-3 text-white" onclick="abrirSelectorImportarJSON()" title="Restaurar o importar copia de seguridad en JSON">
+                        📥 Importar
+                    </button>
+                    <input type="file" id="input-archivo-importar" accept=".json" style="display:none" onchange="procesarArchivoImportar(event)">
                     <button class="btn btn-sm btn-danger rounded-pill px-3" onclick="cerrarSesion()" title="Cerrar sesión de forma segura">
                         Salir
                     </button>
@@ -338,9 +342,14 @@
                     <h3 class="fw-bold mb-1">Gestión de Mesas</h3>
                     <p class="text-muted mb-0 small" id="txt-total-mesas-sub">Supervisión y control por mesa electoral asignada</p>
                 </div>
-                <button class="btn btn-primary rounded-pill px-3 btn-sm shadow-sm" onclick="abrirModalNuevaMesa()">
-                    ➕ Registrar Nueva Mesa
-                </button>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-primary rounded-pill px-3 btn-sm shadow-sm" onclick="cargarDatosDemoInicial()" title="Cargar los 27 miembros de las mesas 043649, 043650 y 043651">
+                        ⚡ Cargar Demo Inicial
+                    </button>
+                    <button class="btn btn-primary rounded-pill px-3 btn-sm shadow-sm" onclick="abrirModalNuevaMesa()">
+                        ➕ Registrar Nueva Mesa
+                    </button>
+                </div>
             </div>
 
             <!-- Contenedor dinámico de tarjetas por mesa -->
